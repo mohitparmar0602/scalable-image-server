@@ -7,3 +7,6 @@ node_modules/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Ignore AWS EC2 SSH keys
+*.pem
