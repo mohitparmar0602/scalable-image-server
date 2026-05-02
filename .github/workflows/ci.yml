@@ -1,6 +1,5 @@
 name: Scalable Image Server CI
 
-# Create a GitHub Actions workflow that runs on push and pull_request
 on:
   push:
     branches: [ "main", "master" ]
@@ -25,16 +24,13 @@ jobs:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
 
-    - name: Install dependencies[cite: 1]
+    - name: Install dependencies
       run: npm install
 
-    - name: Run basic lint checks[cite: 1]
-      # This checks for syntax errors without executing the code
+    - name: Run basic lint checks
       run: node --check server.js
 
-    - name: Build/run the project[cite: 1]
-      # Boot the server, wait 2 seconds, and verify it doesn't instantly crash
-      # The workflow must fail if the project does not build/run successfully[cite: 1]
+    - name: Build and run the project
       run: |
         PORT=3000 node server.js &
         SERVER_PID=$!
