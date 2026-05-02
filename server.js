@@ -1,14 +1,15 @@
-require('dotenv').config(); // Load environment variables
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const sharp = require('sharp'); // BONUS: Image Resizing
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize AWS S3 Client
 const s3Client = new S3Client({
     region: process.env.AWS_REGION,
     credentials: {
@@ -17,82 +18,56 @@ const s3Client = new S3Client({
     }
 });
 
-// Multer Configuration (Memory Storage)
 const storage = multer.memoryStorage();
-
-// File Validation: Only image files allowed (JPG/PNG)
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png'];
-    if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        cb(new Error(`Invalid file type for ${file.originalname}. Only JPG and PNG are allowed.`), false);
-    }
-};
-
 const upload = multer({
     storage,
-    limits: { fileSize: 2 * 1024 * 1024 }, // Max file size: 2MB per file
-    fileFilter
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (['image/jpeg', 'image/png'].includes(file.mimetype)) cb(null, true);
+        else cb(new Error('Only JPG and PNG are allowed.'), false);
+    }
 });
 
-// Expose the endpoint: POST /upload
 app.post('/upload', upload.any(), async (req, res) => {
-    // Check if any files were successfully uploaded
-    if (!req.files || req.files.length === 0) {
-        return res.status(400).json({ error: 'No images provided or invalid file types.' });
-    }
+    if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No images provided.' });
 
     try {
-        // Process and upload all received files to S3
         const uploadPromises = req.files.map(async (file) => {
-            // File naming should be unique (timestamp/UUID)
             const fileExtension = path.extname(file.originalname);
             const uniqueFileName = `${Date.now()}-${uuidv4()}${fileExtension}`;
 
-            const command = new PutObjectCommand({
+            // BONUS 1: Image Resizing using Sharp
+            // Compresses and limits the max width to 800px while maintaining aspect ratio
+            const optimizedBuffer = await sharp(file.buffer)
+                .resize({ width: 800, withoutEnlargement: true })
+                .jpeg({ quality: 80 }) // Convert/compress to 80% quality JPEG
+                .toBuffer();
+
+            // Upload optimized image
+            await s3Client.send(new PutObjectCommand({
                 Bucket: process.env.AWS_S3_BUCKET_NAME,
                 Key: uniqueFileName,
-                Body: file.buffer,
-                ContentType: file.mimetype
+                Body: optimizedBuffer,
+                ContentType: 'image/jpeg' 
+            }));
+
+            // BONUS 2: Generate a Signed S3 URL (Expires in 1 hour)
+            const getCommand = new GetObjectCommand({
+                Bucket: process.env.AWS_S3_BUCKET_NAME,
+                Key: uniqueFileName
             });
+            const signedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
 
-            // Use AWS SDK to upload images to an S3 bucket
-            await s3Client.send(command);
-
-            // Construct the response format[cite: 1]
-            return {
-                url: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.amazonaws.com/${uniqueFileName}`
-            };
+            return { originalName: file.originalname, signedUrl };
         });
 
-        // Wait for all S3 uploads to finish
         const uploadedFiles = await Promise.all(uploadPromises);
-
-        // If it's a single file upload, return the exact object requested by the assignment
-        if (uploadedFiles.length === 1) {
-            return res.status(200).json(uploadedFiles[0]);
-        }
-
-        // If multiple files, return an array of those objects
         res.status(200).json({ uploaded: uploadedFiles });
 
     } catch (error) {
-        console.error("S3 Upload Error:", error);
-        res.status(500).json({ error: 'Failed to upload image(s) to S3.' });
+        console.error("Upload Error:", error);
+        res.status(500).json({ error: 'Failed to process and upload image.' });
     }
 });
 
-// Error handling middleware for Multer
-app.use((err, req, res, next) => {
-    if (err instanceof multer.MulterError) {
-        return res.status(400).json({ error: `Multer Error: ${err.message}` });
-    } else if (err) {
-        return res.status(400).json({ error: err.message });
-    }
-    next();
-});
-
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
