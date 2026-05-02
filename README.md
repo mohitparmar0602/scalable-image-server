@@ -1,40 +1,29 @@
-# Scalable Image Upload Server
+# Scalable Image Upload Server (Production-Ready)
 
-This is a highly scalable backend system built with Node.js that uploads images directly to AWS S3. It operates without a database and utilizes NGINX as a load balancer to distribute traffic across multiple instances.
+This repository contains a stateless, containerized backend system designed for high-availability image processing and storage. It utilizes **NGINX** as a load balancer to distribute traffic across multiple **Node.js** instances, which optimize images using **Sharp** before uploading them to **AWS S3**.
 
-## Setup Steps
-1. Clone this repository.
-2. Run `npm install` to install dependencies.
-3. Create a `.env` file in the root directory with the following variables:
-   - `PORT=3000`
-   - `AWS_REGION=ap-south-1`
-   - `AWS_ACCESS_KEY_ID=your_key`
-   - `AWS_SECRET_ACCESS_KEY=your_secret`
-   - `AWS_S3_BUCKET_NAME=mohit-image-upload-bucket`
+---
 
-## How to run multiple instances
-To run multiple instances, open separate terminal windows and specify different ports:
-- Terminal 1: `$env:PORT=3001; node server.js` (Windows) or `PORT=3001 node server.js` (Mac/Linux)
-- Terminal 2: `$env:PORT=3002; node server.js` (Windows) or `PORT=3002 node server.js` (Mac/Linux)
+## 🏗 System Architecture
+*   **Load Balancer:** NGINX (Round-Robin strategy).
+*   **Backend:** Node.js (Multiple Dockerized instances).
+*   **Image Processing:** Sharp (Auto-resizing to 800px width and 80% JPEG quality).
+*   **Storage:** AWS S3 (Mumbai `ap-south-1` region).
+*   **CI/CD:** GitHub Actions (Automated build, lint, and health checks).
 
-## NGINX configuration
-NGINX is configured to listen on port 80 and use round-robin load balancing to route traffic to the backend instances running on ports 3001 and 3002. 
-*(Include a snippet of your `nginx.conf` upstream block here).*
+---
 
-## GitHub Actions explanation
-The CI pipeline is defined in `.github/workflows/ci.yml`. It triggers on every `push` and `pull_request` to the main branch. The pipeline automatically sets up a Node environment, installs all dependencies, performs a syntax check, and boots the server to ensure it runs without crashing.
+## 🚀 Setup Steps
 
-## Sample request/response
-**Request:**
-`POST http://localhost/upload`
-(Headers: `multipart/form-data`, Body: `image` = file)
+### 1. Prerequisites
+*   Git and Docker installed (if running locally).
+*   AWS Account with an S3 Bucket and IAM User credentials.
 
-**Response:**
-```json
-{
-  "uploaded": [
-    {
-      "url": "[https://mohit-image-upload-bucket.s3.amazonaws.com/1715000000000-uuid.png](https://mohit-image-upload-bucket.s3.amazonaws.com/1715000000000-uuid.png)"
-    }
-  ]
-}
+### 2. Environment Configuration
+Create a `.env` file in the root directory and populate it with your credentials:
+```env
+PORT=3000
+AWS_REGION=ap-south-1
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_S3_BUCKET_NAME=mohit-image-upload-bucket
