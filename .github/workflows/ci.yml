@@ -6,13 +6,18 @@ on:
   pull_request:
     branches: [ "main", "master" ]
 
+# This silences the GitHub Actions deprecation warning
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x]
+        # Updated to modern Node versions to fix the warning
+        node-version: [22.x, 24.x]
 
     steps:
     - name: Checkout Code
@@ -31,6 +36,12 @@ jobs:
       run: node --check server.js
 
     - name: Build and run the project
+      # Provide dummy AWS keys just for the CI test so the server doesn't crash!
+      env:
+        AWS_REGION: ap-south-1
+        AWS_ACCESS_KEY_ID: dummy-key-for-ci
+        AWS_SECRET_ACCESS_KEY: dummy-secret-for-ci
+        AWS_S3_BUCKET_NAME: dummy-bucket
       run: |
         PORT=3000 node server.js &
         SERVER_PID=$!
